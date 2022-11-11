@@ -41,16 +41,16 @@ def process_tweet(tweet):
 def build_word_frequencies(tweets, labels):
     
     freqs = {}
-    yslist = np.squeeze(labels.to_list())
+    yslist = np.squeeze(labels.tolist())
 
-    for i, tweet in zip(yslist, tweets):
+    for label, tweet in zip(yslist, tweets):
         for word in process_tweet(tweet):
-            pair = (word, i)
+            pair = (word, label)
 
             if pair in freqs:
                 freqs[pair] += 1
             else:
-                freqs[pair] += 1
+                freqs[pair] = 1
     
 
     return freqs

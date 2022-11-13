@@ -6,6 +6,10 @@ from nltk.corpus import stopwords
 from nltk.stem import PorterStemmer
 from nltk.tokenize import TweetTokenizer
 
+import sys, os
+here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0,here)
+
 def remove_hyperlinks_and_twitter_styles(tweet):
     tweet = re.sub(r'\$\w*', '', tweet)
     # remove old style retweet text "RT"

@@ -1,12 +1,6 @@
-import text_preprocessing
 import numpy as np
-import nltk
-from nltk.corpus import twitter_samples
 
-nltk.download('twitter_samples')
-
-all_positive_tweets=twitter_samples.strings('positive_tweets.json')
-
+import text_preprocessing
 
 def test_remove_hyperlinks():
     tweet1 = "#mbarbari https://this-is-me.com i love this"

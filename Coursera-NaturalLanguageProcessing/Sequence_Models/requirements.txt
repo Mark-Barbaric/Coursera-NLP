@@ -1,0 +1,4 @@
+trax
+tensorflow
+numpy
+ipykernel

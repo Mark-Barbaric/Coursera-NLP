@@ -2,3 +2,4 @@ trax
 tensorflow
 numpy
 ipykernel
+nltk

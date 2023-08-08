@@ -3,3 +3,5 @@ tensorflow
 numpy
 ipykernel
 nltk
+protobuf
+flax==0.4.2

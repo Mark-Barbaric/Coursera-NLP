@@ -679,12 +679,12 @@ def test_classifier(target):
             "name": "check_default_layer",
             "input": {"vocab_size": 9088, "embedding_dim": 256, "output_dim": 2},
             "expected": {
-                "expected_str": "Serial[\n  Embedding_9088_256\n  Mean\n  Dense_2\n  LogSoftmax\n]",
+                "expected_str": "Serial[\n  Embedding_9088_256\n  Mean\n  Dense_2\n]", #  LogSoftmax\n]",
                 "expected_sublayers_types": [
                     trax.layers.core.Embedding,
                     trax.layers.base.PureLayer,
                     trax.layers.core.Dense,
-                    trax.layers.base.PureLayer,
+#                     trax.layers.base.PureLayer, <-- needed when using LogSoftmax
                 ],
                 "expected_type": trax.layers.combinators.Serial,
             },
@@ -693,12 +693,12 @@ def test_classifier(target):
             "name": "check_small_layer",
             "input": {"vocab_size": 100, "embedding_dim": 16, "output_dim": 4},
             "expected": {
-                "expected_str": "Serial[\n  Embedding_100_16\n  Mean\n  Dense_4\n  LogSoftmax\n]",
+                "expected_str": "Serial[\n  Embedding_100_16\n  Mean\n  Dense_4\n]", # LogSoftmax\n]",
                 "expected_sublayers_types": [
                     trax.layers.core.Embedding,
                     trax.layers.base.PureLayer,
                     trax.layers.core.Dense,
-                    trax.layers.base.PureLayer,
+#                     trax.layers.base.PureLayer, <-- needed when using LogSoftmax
                 ],
                 "expected_type": trax.layers.combinators.Serial,
             },

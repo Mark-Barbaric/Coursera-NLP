@@ -8,3 +8,5 @@ textblob
 attrs
 docopt
 wordcloud
+flask
+flask_restful

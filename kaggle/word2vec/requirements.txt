@@ -1,0 +1,10 @@
+numpy
+pandas
+gensim
+matplotlib
+seaborn
+ipykernel
+textblob
+attrs
+docopt
+wordcloud

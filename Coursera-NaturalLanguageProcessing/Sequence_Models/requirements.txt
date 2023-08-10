@@ -1,4 +1,6 @@
 trax
+pandas
+matplotlib
 tensorflow
 numpy==1.25.0
 ipykernel

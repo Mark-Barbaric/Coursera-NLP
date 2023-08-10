@@ -4,4 +4,8 @@ numpy
 ipykernel
 nltk
 protobuf
+pandas
+scikit-learn 
+scipy 
+matplotlib
 flax==0.4.2

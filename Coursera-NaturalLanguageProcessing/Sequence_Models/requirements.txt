@@ -1,0 +1,9 @@
+trax
+tensorflow
+numpy==1.25.0
+ipykernel
+nltk
+protobuf
+jax==0.4.12
+jaxlib==0.4.12
+keras

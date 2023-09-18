@@ -1,0 +1,4 @@
+[ZoneTransfer]
+ZoneId=3
+ReferrerUrl=https://www.coursera.org/
+HostUrl=https://hub.labs.coursera.org/api/workspaceFileBrowser.v1/ecnkiqquikwt?command=Download&arguments=[{%22mountPath%22:%22/home/jovyan/work%22,%22relativePath%22:%22C3_W3_Assignment.ipynb%22}]

@@ -1,7 +1,10 @@
-**/__pycache__/**
-/.pytest_cache
+**/__pycache__
+**/.pytest_cache
 **/.ipynb_checkpoints/**
 **/data/**
 **/images/**
 **/tmp/**
 **/tmp2/**
+
+**/*.pkl
+**/*.model

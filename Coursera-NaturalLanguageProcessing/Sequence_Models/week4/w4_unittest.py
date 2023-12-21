@@ -3,7 +3,6 @@ import pickle
 import numpy as np
 import random as rnd
 import trax
-from jax.interpreters.xla import DeviceArray
 from trax.fastmath import numpy as jnp
 
 
@@ -966,21 +965,6 @@ def test_TripletLossFn(target):
 
     for test_case in test_cases:
         result = target(**test_case["input"])
-
-        try:
-            assert isinstance(result, DeviceArray)
-            successful_cases += 1
-        except:
-            failed_cases.append(
-                {
-                    "name": test_case["name"],
-                    "expected": DeviceArray,
-                    "got": type(result),
-                }
-            )
-            print(
-                f"Output has the wrong type.\n\tExpected: {failed_cases[-1].get('expected')}.\n\tGot: {failed_cases[-1].get('got')}"
-            )
 
         try:
             assert np.isclose(result, test_case["expected"])

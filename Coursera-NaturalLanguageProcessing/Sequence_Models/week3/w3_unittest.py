@@ -1,607 +1,389 @@
-# -*- coding: utf-8 -*-
-import shutil
-import trax
+from types import ModuleType, FunctionType, FunctionType
+from typing import Any, Callable, List, Optional, Union
+from typing import Dict, List, Optional
+from dlai_grader.grading import test_case, LearnerSubmission, object_to_grade
+from dlai_grader.types import grading_function, grading_wrapper
+from dlai_grader.grading import compute_grading_score
+
+import pickle
 import numpy as np
-from trax.fastmath import numpy as jnp
+import random as rnd
+import keras
+import tensorflow as tf
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.layers import TextVectorization
+from tensorflow.data import Dataset
+import os
 
-# UNIT TEST
-# test data_generator
-def test_data_generator(target):
 
-    test_cases = [
-        {
-            "name": "next_equ_output_check",
-            "input": [1, [[1]], [[1]], 0],
-            "expected": {
-                "expected_output": (np.array([[1]]), np.array([[1]])),
-                "expected_type": type((lambda: (yield (0)))()),
-            },
-        },
-        {
-            "name": "next_equ_output_check",
-            "input": [2, [[1, 2, 3, 4, 5]], [[1, 2, 3, 4, 5]], -1],
-            "expected": {
-                "expected_output": (
-                    np.array([[1, 2, 3, 4, 5], [1, 2, 3, 4, 5]]),
-                    np.array([[1, 2, 3, 4, 5], [1, 2, 3, 4, 5]]),
-                ),
-                "expected_type": type((lambda: (yield (0)))()),
-            },
-        },
-        {
-            "name": "next_equ_output_check",
-            "input": [
-                2,
-                [[1, 2, 3, 4, 5], [2, 3, 4, 5]],
-                [[1, 2, 3, 4, 5], [1, 2, 3, 4]],
-                -1,
-            ],
-            "expected": {
-                "expected_output": (
-                    (np.array([[1, 2, 3, 4, 5], [2, 3, 4, 5, -1]])),
-                    (np.array([[1, 2, 3, 4, 5], [1, 2, 3, 4, -1]])),
-                ),
-                "expected_type": type((lambda: (yield (0)))()),
-            },
-            "error": "Wrong output",
-        },
-        {
-            "name": "next_two_outputs_check",
-            "input": [
-                3,
-                [[1, 2, 3, 4, 5], [2, 3, 4, 5], [1], [2]],
-                [[1, 2, 3, 4, 5], [1, 2, 3, 4], [1], [2]],
-                -1,
-            ],
-            "expected": {
-                "expected_output_first_iter": (
-                    (
-                        np.array(
-                            [[1, 2, 3, 4, 5], [2, 3, 4, 5, -1], [1, -1, -1, -1, -1]]
-                        )
-                    ),
-                    (
-                        np.array(
-                            [[1, 2, 3, 4, 5], [1, 2, 3, 4, -1], [1, -1, -1, -1, -1]]
-                        )
-                    ),
-                ),
-                "expected_output_sec_iter": (
-                    (
-                        np.array(
-                            [[2, -1, -1, -1, -1], [1, 2, 3, 4, 5], [2, 3, 4, 5, -1]]
-                        )
-                    ),
-                    (
-                        np.array(
-                            [[2, -1, -1, -1, -1], [1, 2, 3, 4, 5], [1, 2, 3, 4, -1]]
-                        )
-                    ),
-                ),
-                "expected_type": type((lambda: (yield (0)))()),
-            },
-        },
-    ]
+grading_function = Callable[[Any], List[test_case]]
+learner_submission = Union[ModuleType, LearnerSubmission]
+grading_wrapper = Callable[[learner_submission, Optional[ModuleType]], grading_function]
 
-    successful_cases = 0
-    failed_cases = []
+def print_results(test_cases):
+    num_cases = len(test_cases)
+    failed_cases = [t for t in test_cases if t.failed == True]
+    num_failed = len(failed_cases)
+    if num_failed==0:
+        print("\033[92mAll tests passed!")
+    else:
+        for failed_case in failed_cases:
+            print(f"{failed_case.msg}\n\tExpected:{failed_case.want},\n\tGot:{failed_case.got}.\n")
+        print(f"\033[92m{num_cases-num_failed} tests passed")
+        print(f"\033[91m{num_failed} tests failed")    
+		
+# Test Siamese
+def test_Siamese(learner_func):
 
-    for test_case in test_cases:
-        gen_result = target(*test_case["input"])
-        #  Checking data type
+    text_vectorization = TextVectorization()
+    text_vectorization.adapt(['test vocabulary'])
+    inpt = {"vocab_size": 41699, "d_feature": 128}
+    
+    t = test_case()
+    try:
+        model = learner_func(text_vectorization, **inpt)
+    except Exception as e:
+        t.failed = True
+        t.msg = f"There was an error evaluating the `Siamese` function. "
+        t.expected = "No exceptions"
+        t.got = f"{str(e)}"
+        return [t]
+    
+    cases: List[test_case] = []
+
+    # Test output type
+    t = test_case()
+    if not isinstance(model, keras.models.Model):
+        t.failed = True
+        t.msg = "Model returned by `Siamese` has incorrect type."
+        t.want = keras.models.Model
+        t.got = type(model)
+        return [t]
+    cases.append(t)
+    
+		
+    # Test layers types
+    expected_layers_type = [
+                keras.layers.InputLayer,
+                keras.layers.InputLayer,
+                keras.models.Sequential]
+    for layer, expected_l_type in zip(model.layers, expected_layers_type):
+        t = test_case()
+        if not isinstance(layer, expected_l_type):
+            t.failed = True
+            t.msg = f"Layer '{layer.name}' has an incorrect type."
+            t.want = expected_l_type
+            t.got = type(layer)
+        cases.append(t)
+
+    # Test sequential layers type
+    expected_sequential_layer_type = [keras.layers.TextVectorization,
+                keras.layers.Embedding,
+                keras.layers.LSTM,
+                keras.layers.GlobalAveragePooling1D,
+                keras.layers.Lambda]
+    for (layer, expected_seq_type) in zip(model.get_layer(name='sequential').layers, expected_sequential_layer_type):
+        t = test_case()
+        if not isinstance(layer, expected_seq_type):
+            t.failed = True
+            t.msg = f"Sublayer {layer.name} has an incorrect type."
+            t.want = expected_seq_type
+            t.got = type(layer)
+        cases.append(t)
+    
+    # Test expected input and output shapes
+    expected_input_shape = [
+                            [(None, 1)], 
+                            [(None, 1)], 
+                            (None,), 
+                            [(None, 128), (None, 128)]
+                            ]
+    
+    expected_output_shape = [
+                            [(None, 1)], 
+                            [(None, 1)], 
+                            (None, 128), 
+                            (None, 256)
+                            ]
+    for layer, input_shape, output_shape in zip(model.layers, expected_input_shape, expected_output_shape):
+        t = test_case()
+        if layer.input_shape != input_shape:
+            t.failed = True
+            t.msg = f"Layer '{layer.name}' has an incorrect input shape."
+            t.want = input_shape
+            t.got = layer.input_shape
+        cases.append(t)
+        t = test_case()
+        if layer.output_shape != output_shape:
+            t.failed = True
+            t.msg = f"Layer '{layer.name}' has an incorrect output shape."
+            t.want = output_shape
+            t.got = layer.output_shape
+        cases.append(t)
+
+    # Test dimensions on a smaller model (d_feature=16)
+    inpt = {"vocab_size": 200, "d_feature": 16}
+    
+    t = test_case()
+    model = learner_func(text_vectorization, **inpt)
+
+
+    expected_input_shape = [
+                            [(None, 1)], 
+                            [(None, 1)], 
+                            (None,), 
+                            [(None, 16), (None, 16)]
+                            ]
+    expected_output_shape = [
+                            [(None, 1)], 
+                            [(None, 1)], 
+                            (None, 16), 
+                            (None, 32)
+                            ]
+    for layer, input_shape, output_shape in zip(model.layers, expected_input_shape, expected_output_shape):
+        t = test_case()
+        if layer.input_shape != input_shape:
+            t.failed = True
+            t.msg = f"Layer '{layer.name}' has an incorrect input shape."
+            t.want = input_shape
+            t.got = layer.input_shape
+        cases.append(t)
+        t = test_case()
+        if layer.output_shape != output_shape:
+            t.failed = True
+            t.msg = f"Layer '{layer.name}' has an incorrect output shape."
+            t.want = output_shape
+            t.got = layer.output_shape
+        cases.append(t)
+		
+    print_results(cases)
+
+
+
+# Test TripletLossFn
+def test_TripletLoss(learner_func):
+
+    t = test_case()
+    
+    cases: List[test_case] = []
+
+    v1v2_list = [
+        np.array([[0.26726124, 0.53452248, 0.80178373,0.26726124, 0.53452248, 0.80178373],
+                  [0.5178918, 0.57543534, 0.63297887,-0.5178918, -0.57543534, -0.63297887],]),
+        np.array([[0.26726124, 0.53452248, 0.80178373,0.32929278, 0.5488213, 0.76834982],
+                    [0.64616234, 0.57436653, 0.50257071,0.64231723, 0.57470489, 0.50709255],
+                    [-0.21821789, -0.87287156, -0.43643578,-0.20313388, -0.8802468, -0.42883819],
+                    [0.13608276, -0.95257934, 0.27216553,0.09298683, -0.96971978, 0.22582515]]),
+        np.array([[0.26726124, 0.53452248, 0.80178373,0.32929278, 0.5488213, 0.76834982],
+                    [0.64616234, 0.57436653, 0.50257071,0.64231723, 0.57470489, 0.50709255],
+                    [-0.21821789, -0.87287156, -0.43643578,-0.20313388, -0.8802468, -0.42883819],
+                    [0.13608276, -0.95257934, 0.27216553,0.09298683, -0.96971978, 0.22582515]]),
+        ]
+    margin = [0.25,0.25,0.8]
+    expected_loss = [0.7035077, 0.30219180776031007, 2.4262490547900892]
+    
+    for v1v2, m, expected in zip(v1v2_list, margin, expected_loss):
+        t = test_case()
         try:
-            assert isinstance(gen_result, test_case["expected"]["expected_type"])
-            successful_cases += 1
-        except:
-            failed_cases.append(
-                {
-                    "name": test_case["name"],
-                    "expected": test_case["expected"]["expected_type"],
-                    "got": type(gen_result),
-                }
-            )
-            print(
-                f"Data type mistmatch.\n\tExpected: {failed_cases[-1].get('expected')}.\n\tGot: {failed_cases[-1].get('got')}"
-            )
-
-        if test_case["name"] == "next_equ_output_check": 
-            result = next(gen_result)
-            try:
-                assert np.allclose(result, test_case["expected"]["expected_output"])
-                successful_cases += 1
-            except:
-                failed_cases.append(
-                    {
-                        "name": test_case["name"],
-                        "expected": test_case["expected"]["expected_output"],
-                        "got": result,
-                    }
-                )
-                print(
-                    f"Wrong output from data generator.\n\t Expected: {failed_cases[-1].get('expected')}.\n\tGot: {failed_cases[-1].get('got')}."
-                )
-            
-            try:
-                assert issubclass(
-                        result[0].dtype.type, trax.fastmath.numpy.integer
-                )
-                successful_cases += 1
-            except:
-                failed_cases.append(
-                    {
-                        "name": "check_type1",
-                        "expected": trax.fastmath.numpy.integer,
-                        "got": result[0].dtype.type,
-                    }
-                )
-                print(
-                    f"First output from data_generator has elements with the wrong type.\n\tExpected {failed_cases[-1].get('expected')}.\n\tGot {failed_cases[-1].get('got')}."
-                )
-            
+            loss = learner_func([1]*len(v1v2), v1v2, m)
+        except Exception as e:
+            t.failed = True
+            t.msg = f"There was an error evaluating the TripletLoss function."
+            t.expected = "No exceptions"
+            t.got = f"{str(e)}"
+            return [t]
         
-            try:
-                assert issubclass(
-                    result[1].dtype.type, trax.fastmath.numpy.integer
-                )
-                successful_cases += 1
-            except:
-                failed_cases.append(
-                    {
-                        "name": "check_type2",
-                        "expected": trax.fastmath.numpy.integer,
-                        "got": result[1].dtype.type,
-                    }
-                )
-                print(
-                    f"Second output from data_generator has elements with the wrong type.\n\tExpected {failed_cases[-1].get('expected')}.\n\tGot {failed_cases[-1].get('got')}."
-                )
-
-            
-
-        else:
-            result1 = next(gen_result)
-            try:
-                assert np.allclose(
-                    result1, test_case["expected"]["expected_output_first_iter"]
-                )
-                successful_cases += 1
-            except:
-                failed_cases.append(
-                    {
-                        "name": test_case["name"],
-                        "expected": test_case["expected"]["expected_output_first_iter"],
-                        "got": result,
-                    }
-                )
-                print(
-                    f"Wrong output from data generator in the first iteration.\n\t Expected: {failed_cases[-1].get('expected')}.\n\tGot: {failed_cases[-1].get('got')}."
-                )
-
-            result2 = next(gen_result)
-            try:
-                assert np.allclose(
-                    result2, test_case["expected"]["expected_output_sec_iter"]
-                )
-                successful_cases += 1
-            except:
-                failed_cases.append(
-                    {
-                        "name": test_case["name"],
-                        "expected": test_case["expected"]["expected_output_sec_iter"],
-                        "got": result,
-                    }
-                )
-                print(
-                    f"Wrong output from data generator in the second iteration.\n\t Expected: {failed_cases[-1].get('expected')}.\n\tGot: {failed_cases[-1].get('got')}."
-                )
-                        
-
-    if len(failed_cases) == 0:
-        print("\033[92m All tests passed")
-    else:
-        print("\033[92m", successful_cases, " Tests passed")
-        print("\033[91m", len(failed_cases), " Tests failed")
-
-    # return failed_cases, len(failed_cases) + successful_cases
-
-
-# UNIT TEST
-# test data_generator
-def test_NER(target):
-    successful_cases = 0
-    failed_cases = []
-
-    tag_map = {"O": 0, "B-geo": 1, "B-gpe": 2}
-
-    test_cases = [
-        {
-            "name": "default_input_check",
-            "input": {
-                "vocab_size": 35181,
-                "d_model": 50,
-                "tags": {"O": 0, "B-geo": 1, "B-gpe": 2},
-            },
-            "expected": {
-                "expected_str": "Serial[\n  Embedding_35181_50\n  LSTM_50\n  Dense_3\n  LogSoftmax\n]",
-                "expected_type": trax.layers.combinators.Serial,
-                "expected_sublayers_type": [
-                    trax.layers.core.Embedding,
-                    trax.layers.combinators.Serial,
-                    trax.layers.core.Dense,
-                    trax.layers.base.PureLayer,
-                ],
-            },
-        },
-        {
-            "name": "small_input_check",
-            "input": {
-                "vocab_size": 100,
-                "d_model": 8,
-                "tags": {"O": 0, "B-geo": 1, "B-gpe": 2, "B-per": 3, "I-geo": 4},
-            },
-            "expected": {
-                "expected_str": "Serial[\n  Embedding_100_8\n  LSTM_8\n  Dense_5\n  LogSoftmax\n]",
-                "expected_type": trax.layers.combinators.Serial,
-                "expected_sublayers_type": [
-                    trax.layers.core.Embedding,
-                    trax.layers.combinators.Serial,
-                    trax.layers.core.Dense,
-                    trax.layers.base.PureLayer,
-                ],
-            },
-        },
-    ]
-
-    # In trax 1.2.4 the LSTM layer appears as a Branch instead of a Serial
-    # Test all layers are in the expected sequence
-    for test_case in test_cases:
-        # print(test_case)
-        # print(target)
-        model = target(**test_case["input"])
-        description = str(model)
-
-        try:
-            assert description.replace(" ", "") == test_case["expected"][
-                "expected_str"
-            ].replace(" ", "")
-            successful_cases += 1
-        except:
-            failed_cases.append(
-                {
-                    "name": test_case["name"],
-                    "expected": test_case["expected"]["expected_str"],
-                    "got": description,
-                }
-            )
-            print(
-                f"Wrong model.\n\tExpected: {failed_cases[-1].get('expected')}. \n\tGot: {failed_cases[-1].get('got')}."
-            )
-
-        # Test the output type
-        try:
-            assert isinstance(model, test_case["expected"]["expected_type"])
-            successful_cases += 1
-        except:
-            failed_cases.append(
-                {
-                    "name": test_case["name"],
-                    "expected": test_case["expected"]["expected_type"],
-                    "got": type(model),
-                }
-            )
-            print(
-                f"Model has the wrong type.\n\tExpected: {failed_cases[-1].get('expected')}.\n\tGot: {failed_cases[-1].get('got')}."
-            )
-
-        try:
-            sublayers_type = lambda x: list(map(type, x.sublayers))
-            model_sublayers_type = sublayers_type(model)
-
-            for i in range(len(test_case["expected"]["expected_sublayers_type"])):
-                assert str(model_sublayers_type[i]) == str(
-                    test_case["expected"]["expected_sublayers_type"][i]
-                )
-            successful_cases += 1
-        except:
-            failed_cases.append(
-                {
-                    "name": "sublayers_type_check",
-                    "expected": test_case["expected"]["expected_sublayers_type"],
-                    "got": model_sublayers_type,
-                }
-            )
-            print(
-                f"Model sublayers do not have the correct type.\n\tExpected: {failed_cases[-1].get('expected')}.\n\tGot {failed_cases[-1].get('got')}."
-            )
-
-    if len(failed_cases) == 0:
-        print("\033[92m All tests passed")
-    else:
-        print("\033[92m", successful_cases, " Tests passed")
-        print("\033[91m", len(failed_cases), " Tests failed")
-
-
-# UNIT TEST
-# test train_model
-def test_train_model(target, model, data_generator):
-
-    successful_cases = 0
-    failed_cases = []
-
-    train_steps = 0
-    output_dir = "/tmp/model"
-
-    try:
-        shutil.rmtree(output_dir)
-    except OSError as e:
-        pass
-
-    # Create simple data generator
-    tr_generator = trax.data.inputs.add_loss_weights(
-        data_generator(*[2, [[1]], [[1]], 35180]), id_to_mask=35180
+        if not np.isclose(loss, expected):
+            t.failed = True
+            t.msg = f"Got a wrong triplet loss for inputs out: {v1v2}, and margin {m}"
+            t.want = expected
+            t.got = loss
+        cases.append(t)
+    print_results(cases)
+	
+# test trainer
+def test_train_model(learner_func, model, lossfn):
+    
+    train_Q1_testing = np.array(
+        [
+            'Astrology : I am a Capricorn Sun Cap moon and cap rising ... what does that say about me?',
+            'How can I be a good geologist?',
+            'How do I read and find my YouTube comments ?',
+        ],
+        dtype=object,
     )
 
-    # Create simple data generator
-    ev_generator = trax.data.inputs.add_loss_weights(
-        data_generator(*[2, [[1]], [[1]], 35180]), id_to_mask=35180
+    train_Q2_testing = np.array(
+        [
+            "I'm a triple Capricorn (Sun, Moon and ascendant in Capricorn) What does this say about me?",
+            'What should I do to be a great geologist?',
+            'How can I see all my Youtube comments?',
+        ],
+        dtype=object,
     )
+    text_vectorization = TextVectorization()
+    text_vectorization.adapt(np.concatenate((train_Q1_testing, train_Q2_testing)))
+    
+    train_gen = Dataset.from_tensor_slices(((train_Q1_testing, train_Q2_testing),
+                                        tf.constant([1]*len(train_Q1_testing)))).batch(batch_size=3)
+    val_gen = Dataset.from_tensor_slices(((train_Q1_testing, train_Q2_testing),
+                                        tf.constant([1]*len(train_Q1_testing)))).batch(batch_size=3)
+    
+    try: 
+        trained_model = learner_func(model, lossfn, text_vectorization, train_gen, val_gen, train_steps = 0)
+    except Exception as e:
+        t.failed = True
+        t.msg = f"There was an error evaluating the `train_model` function. "
+        t.expected = "No exceptions"
+        t.got = f"{str(e)}"
+        return [t]
+    
+    cases: List[test_case] = []
 
-    trainer = target(
-        model, tr_generator, ev_generator, train_steps, output_dir=output_dir
-    )
+    t = test_case()
+    loss_fn = "TripletLoss"
+    description = str(trained_model.loss.__name__)
+    if not description == loss_fn:	
+        t.failed = True
+        t.msg = "fit method got wrong loss function"
+        t.want = loss_fn
+        t.got = description
+    cases.append(t)
 
-    # Test the output type
-    try:
-        assert isinstance(trainer, trax.supervised.training.Loop)
-        successful_cases += 1
-    except:
-        failed_cases.append(
-            {
-                "name": "trainer_type",
-                "expected": trax.supervised.training.Loop,
-                "got": type(trainer),
-            }
-        )
-        print(
-            f"Wrong type for the training object.\n\tExpected: {failed_cases[-1].get('expected')}.\n\tGot: {failed_cases[-1].get('got')}"
-        )
+    t = test_case()
+    if not isinstance(trained_model.optimizer, Adam):
+        t.failed = True
+        t.msg = "fit method got a wrong optimizer"
+        t.want = Adam
+        t.got = trained_model.optimizer
+    cases.append(t)
+    
+    t = test_case()
 
-    # Test correct model loss_fn
-    loss_fn = "CrossEntropyLoss_in3"
-    description = str(trainer._tasks[0].loss_layer)
-
-    try:
-        assert description == loss_fn
-        successful_cases += 1
-    except:
-        failed_cases.append(
-            {"name": "loss_fn_check", "expected": loss_fn, "got": description}
-        )
-        print(
-            f"Wrong loss function.\n\tExpected: {failed_cases[-1].get('expected')}.\n\tGot: {failed_cases[-1].get('got')}"
-        )
-
-    # Test the optimizer parameter
-    try:
-        assert isinstance(trainer._tasks[0].optimizer, trax.optimizers.adam.Adam)
-        successful_cases += 1
-    except:
-        failed_cases.append(
-            {
-                "name": "optimizer_check",
-                "expected": trax.optimizers.adam.Adam,
-                "got": type(trainer._tasks[0].optimizer),
-            }
-        )
-        print(
-            f"Wrong optimizer. Expected {failed_cases[-1].get('expected')}. Got {failed_cases[-1].get('got')}."
-        )
-
-    opt_params_dict = {
-        "weight_decay_rate": jnp.array(1.0e-5),
-        "b1": jnp.array(0.9),
-        "b2": jnp.array(0.999),
-        "eps": jnp.array(1.0e-5),
-        "learning_rate": jnp.array(0.01),
-    }
-
-    try:
-        assert trainer._tasks[0]._optimizer.opt_params == opt_params_dict
-        successful_cases += 1
-    except:
-        failed_cases.append(
-            {
-                "name": "optimizer_parameters_check",
-                "expected": opt_params_dict,
-                "got": trainer._tasks[0]._optimizer.opt_params,
-            }
-        )
-
-    # Test the metrics in the evaluation task
-    test_func = lambda x: list(map(str, x._eval_tasks[0]._metric_names))
-
-    try:
-        assert test_func(trainer) == ["CrossEntropyLoss", "Accuracy"]
-        successful_cases += 1
-    except:
-        failed_cases.append(
-            {
-                "name": "metrics_check",
-                "expected": ["CrossEntropyLoss", "Accuracy"],
-                "got": test_func(trainer),
-            }
-        )
-        print(
-            f"Wrong metrics in evaluations task. Expected {failed_cases[-1].get('expected')}. Got {failed_cases[-1].get('got')}."
-        )
-
-    # Test correct output_dir
-    try:
-        assert trainer._output_dir == output_dir
-        successful_cases += 1
-    except:
-        failed_cases.append(
-            {
-                "name": "output_dir_check",
-                "expected": output_dir,
-                "got": trainer._output_dir,
-            }
-        )
-        print("Wrong output dir.")
-
-    if len(failed_cases) == 0:
-        print("\033[92m All tests passed")
-    else:
-        print("\033[92m", successful_cases, " Tests passed")
-        print("\033[91m", len(failed_cases), " Tests failed")
-
-    # return failed_cases, len(failed_cases) + successful_cases
+    try: 
+        trained_model = learner_func(model, lossfn, text_vectorization, train_gen, val_gen, d_feature =16, lr = 0.1, train_steps = 0)
+    except Exception as e:
+        t.failed = True
+        t.msg = f"There was an error evaluating the `train_model` function."
+        t.expected = "No exceptions"
+        t.got = f"{str(e)}"
+        return [t]
+    
+    t = test_case()
+    if not np.isclose(trained_model.optimizer.learning_rate, 0.1):
+        t.failed = True
+        t.msg = "Wrong learning rate"
+        t.want = 0.1
+        t.got = trained_model.optimizer.learning_rate.numpy()
+    cases.append(t)
+	
+    print_results(cases)
 
 
-# like_pred: Creates a prediction like matrix base on a set of true labels
-def like_pred(labels, pad, tag_map_size):
-    nb_sentences = len(labels)
-    max_len = len(labels[0])
-    result = []
-    for i in range(0, nb_sentences):
-        sentence = []
-        for label in labels[i]:
-            word = np.full(tag_map_size, 0)
-            if label != pad:
-                word[label] = 1
-            sentence.append(word)
-        result.append(np.array(sentence))
+# test classification
+def test_classify(learner_func, model):
+    Q1_test = []
+    with open("/tf/support_files/classify_fn/Q1_test_words.pkl", "rb") as f:
+        while True:
+            try:
+                Q1_test.append(pickle.load(f))
+            except EOFError:
+                break  # Reached the end of the file
+    Q2_test = []
+    with open("/tf/support_files/classify_fn/Q2_test_words.pkl", "rb") as f:
+        while True:
+            try:
+                Q2_test.append(pickle.load(f))
+            except EOFError:
+                break  # Reached the end of the file
+    with open("/tf/support_files/classify_fn/y_test.pkl", "rb") as f:
+        y_test = pickle.load(f)
 
-    return np.array(result)
 
+    model = tf.keras.models.load_model('./model/trained_model.keras', safe_mode=False, compile=False)
 
-# test test_evaluate_prediction
-def test_evaluate_prediction(target):
-    successful_cases = 0
-    failed_cases = []
+    threshold = [0.7, 0.75, 0.7, 0.8,]
+    batch_size = [512, 512, 256, 256]
+    expected_acc = [0.7148571428571429, 0.7048571428571428, 0.7174285714285714, 0.682]
+    expected_cm = [np.array([[1624 ,525],[ 473,  878]]),
+                    np.array([[1747,  421], [ 612,  720]]),
+                    np.array([[1647,  521], [ 468,  864]]),
+                    np.array([[1857,  311], [ 802,  530]])]
+    
+    cases: List[test_case] = []
+    kk = 0
+    for th, bs, eacc, ecm in zip(threshold, batch_size, expected_acc, expected_cm):
+        t = test_case()
+        try: 
+            pred_acc, cm = learner_func(Q1_test[kk:kk+3500], Q2_test[kk:kk+3500], 
+                                    y_test[kk:kk+3500], th, model, bs, verbose=False)
+        except Exception as e:
+            t.failed = True
+            t.msg = f"There was an error evaluating the `classify` function. "
+            t.expected = "No exceptions"
+            t.got = f"{str(e)}"
+            return [t]
+        
+        t = test_case()
+        if not np.isclose(pred_acc, eacc):
+            t.failed = True
+            t.msg = f"Wrong accuracy for threshold={th} and batch_size={bs}"
+            t.want = eacc
+            t.got = pred_acc
+        cases.append(t)
+        
+        t = test_case()
+        if not np.isclose(cm, ecm).all():
+            t.failed = True
+            t.msg = f"Wrong confusion matrix for threshold={th} and batch_size={bs}"
+            t.want = ecm
+            t.got = cm
+        cases.append(t)
+        
+        kk =+ 1000
+    
+    print_results(cases)
 
-    pad = 35180
-    test_cases = [
-        {
-            "name": "equ_output_check",  # worked!
-            "input": [
-                like_pred(np.array([[1, 0, 0], [2, 0, 0], [3, 4, 16]]), pad, 17),
-                np.array([[1, 0, 0], [2, 0, 0], [3, 4, 16]]),  # <= labels
-                pad,
-            ],
-            "expected": {"expected_output": 1, "expected_type": np.float64},
-            "error": "Wrong output.",
-        },
-        {
-            "name": "equ_output_check",  # leave this due to pad word
-            "input": [
-                np.array(
-                    [
-                        [
-                            [0, 1, 0, 0, 0, 0, 0],  # <= predictions
-                            [1, 0, 0, 0, 0, 0, 0],
-                            [0, 1, 0, 0, 0, 0, 0],
-                        ],  # pad word
-                        [
-                            [0, 0, 1, 0, 0, 0, 0],
-                            [1, 0, 0, 0, 0, 0, 0],
-                            [1, 0, 0, 0, 0, 0, 0],
-                        ],
-                        [
-                            [0, 0, 0, 1, 0, 0, 0],
-                            [0, 0, 0, 0, 1, 0, 0],
-                            [0, 0, 0, 0, 0, 1, 0],
-                        ],
-                    ]
-                ),
-                np.array([[1, 0, pad], [2, 0, 0], [3, 4, 5]]),  # <= labels
-                pad,
-            ],
-            "expected": {"expected_output": 1, "expected_type": np.float64},
-            "error": "Wrong output: Pad token is being considered in accuracy calculation. Make sure to apply the mask.",
-        },
-        {
-            "name": "equ_output_check",  # leave this due to pad word
-            "input": [
-                np.array(
-                    [
-                        [
-                            [0, 1, 0, 0, 0, 0, 0],  # <= predictions
-                            [1, 0, 0, 0, 0, 0, 0],
-                            [0, 1, 0, 0, 0, 0, 0],
-                        ],  # pad word
-                        [
-                            [0, 0, 1, 0, 0, 0, 0],
-                            [1, 0, 0, 0, 0, 0, 0],
-                            [1, 0, 0, 0, 0, 0, 0],
-                        ],
-                        [
-                            [0, 0, 0, 1, 0, 0, 0],
-                            [0, 0, 0, 0, 1, 0, 0],
-                            [0, 0, 0, 0, 0, 1, 0],
-                        ],
-                    ]
-                ),
-                np.array(
-                    [[1, 0, pad], [2, 1, 0], [3, 0, 0]]  # <= labels  # <= 1 error
-                ),  # <= 2 errors
-                pad,
-            ],
-            "expected": {"expected_output": 0.625, "expected_type": np.float64},
-            "error": "Wrong output: Accuracy must be 5/8 = 0.625",
-        },
-        {
-            "name": "equ_output_check",
-            "input": [
-                like_pred([[1, 1, 16, 35180], [0, 1, 2, 3], [1, 0, 0, 6]], pad, 17),
-                np.array(
-                    [[1, 1, 16, 35180], [0, 1, 2, 3], [1, 0, 0, 6]]
-                ),  # <= 2 errors
-                pad,
-            ],
-            "expected": {"expected_output": 1, "expected_type": np.float64},
-            "error": "Wrong output: 3 sentences with perfect match",
-        },
-    ]
+# test predict
+def test_predict(learner_func, model):
+    cases: List[test_case] = []
 
-    for test_case in test_cases:
-        result = target(*test_case["input"])
-
+    model = tf.keras.models.load_model('./model/trained_model.keras', safe_mode=False, compile=False)
+    
+    question1 = ["When will I see you?", "Do they enjoy eating the dessert?", 
+                 "How does a long distance relationship work?", 
+                 "How does a long distance relationship work?",
+                 "Why don't we still do great music like in the 70's and 80's?", ]
+    question2 = ["When can I see you again?", 
+                 "Do they like hiking in the desert?", 
+                 "How are long distance relationships maintained?", 
+                 "How are long distance relationships maintained?", 
+                 "Should I raise my young child on 80's music?",]
+    threshold = [0.7, 0.7, 0.5, 0.75, 0.5]
+    expected_label = [True, False, True, True, False]
+    for q1, q2, th, lab in zip(question1, question2, threshold, expected_label):
+        t = test_case()
         try:
-            assert test_case["expected"]["expected_output"] == result
-            successful_cases += 1
-        except:
-            failed_cases.append(
-                {
-                    "name": test_case["name"],
-                    "expected": test_case["expected"]["expected_output"],
-                    "got": result,
-                }
-            )
-            print(
-                f"{test_case['error']}.\n\tExpected: {failed_cases[-1].get('expected')}.\n\tGot: {failed_cases[-1].get('got')}."
-            )
-
-        try:
-            assert isinstance(result, test_case["expected"]["expected_type"])
-            successful_cases += 1
-        except:
-            failed_cases.append(
-                {
-                    "name": test_case["name"],
-                    "expected": test_case["expected"]["expected_type"],
-                    "got": type(result),
-                }
-            )
-            print(
-                f"Wrong data type for output.\n\tExpected: {failed_cases[-1].get('expected')}.\n\tGot: {failed_cases[-1].get('got')}"
-            )
-
-    if len(failed_cases) == 0:
-        print("\033[92m All tests passed")
-    else:
-        print("\033[92m", successful_cases, " Tests passed")
-        print("\033[91m", len(failed_cases), " Tests failed")
-
-    #  return failed_cases, len(failed_cases) + successful_cases
-
+            pred = learner_func(q1, q2, th, model, verbose=False)
+        except Exception as e:
+            t.failed = True
+            t.msg = f"There was an error evaluating the `predict` function."
+            t.expected = "No exceptions"
+            t.got = f"{str(e)}"
+            return [t]
+        
+        t = test_case()
+        if not isinstance(pred, (np.bool_, np.ndarray)):
+            t.failed = True
+            t.msg = "There output of the function has wrong type"
+            t.want = np.bool_
+            t.got = type(pred)
+            return [t]
+        
+        if pred != lab:
+            t.failed=True
+            t.msg = f"Wrong prediction for questions Q1: {q1}, Q2: {q2}"
+            t.want = lab
+            t.got = pred
+        cases.append(t)
+    print_results(cases)

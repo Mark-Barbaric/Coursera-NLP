@@ -10,3 +10,7 @@
 **/*.model
 
 **/venv_Sequence_Models
+
+**/model
+**/models
+**/your-model

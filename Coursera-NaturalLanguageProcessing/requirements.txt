@@ -1,4 +1,5 @@
 tensorflow
+tensorflow-text
 numpy
 ipykernel
 nltk
@@ -9,3 +10,4 @@ scipy
 matplotlib
 flax
 dlai-grader
+sacrebleu

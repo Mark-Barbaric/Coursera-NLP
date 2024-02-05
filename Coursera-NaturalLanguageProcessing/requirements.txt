@@ -11,3 +11,5 @@ matplotlib
 flax
 dlai-grader
 sacrebleu
+transformers
+datasets

@@ -9,7 +9,7 @@
 **/*.pkl
 **/*.model
 
-**/venv_coursera_nlp
+**/venv*
 
 **/model
 **/models

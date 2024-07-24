@@ -2,17 +2,21 @@
 
 Various repositories containing Course Materials, Research Papers and Jupyter Notebooks for a number of Coursera NLP Courses.
 
+## Generative AI with Large Language Models
+
+Course covering the below topics:
+
+- Prompt Engineering
+- Fine Tuning with Hugging Face
+
 ## Natural Language Processing Specialization
 
 Coursera course covering various aspects of NLP provided by DeepLearning.AI.
 
-### Classification and Vector Spaces
-
-### Sequence Models
-
-### Probabilistic Models
-
-### Attention Models
+- Classification and Vector Spaces 
+- Sequence Models
+- Probabilistic Models
+- Attention Models
 
 ## Short Courses
 

@@ -9,6 +9,10 @@
 **/*.pkl
 **/*.model
 
+*.pkl
+*.npy
+*.pkl.gz
+
 **/venv*
 
 **/model

@@ -13,7 +13,9 @@
 *.npy
 *.pkl.gz
 
+# Vens
 **/venv*
+.venv
 
 **/model
 **/models

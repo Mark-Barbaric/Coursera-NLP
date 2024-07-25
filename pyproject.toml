@@ -1,0 +1,33 @@
+[tool.poetry]
+name = "coursera nlp courses"
+version = "0.1.0"
+description = "Jupyter notebooks related to various Coursera NLP Courses."
+authors = ["Mark Barbaric <markantonybarbaric@hotmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = ">=3.10, <3.12"
+tensorflow = "2.16.1"
+tensorflow-text = "2.16.1"
+numpy = "1.26.4"
+ipykernel = "^6.29.5"
+nltk = "^3.8.1"
+pandas = "^2.2.2"
+scikit-learn = "^1.5.1"
+scipy = "1.10.1"
+matplotlib = "^3.9.1"
+flax = "^0.8.5"
+dlai-grader = "^1.18.0"
+sacrebleu = "^2.4.2"
+transformers = "4.36.1"
+datasets = "^2.20.0"
+plotly = "^5.23.0"
+networkx = "^3.3"
+gensim = "4.3.0"
+protobuf = "3.20.3"
+torch = "^2.4.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
